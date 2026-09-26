@@ -88,6 +88,223 @@ backend-test/
 
 ---
 
+## 📖 Dokumentasi Endpoint API
+
+Base URL: `http://localhost:3000/api`
+
+### 1. Endpoint Pengguna & Autentikasi (`/users`)
+
+#### • Register User (Daftar Akun)
+- **Method:** `POST`
+- **URL:** `/api/users`
+- **Headers:** `Content-Type: application/json`
+- **Body Request:**
+  ```json
+  {
+    "name": "John Doe",
+    "email": "johndoe@example.com",
+    "password": "secretpassword"
+  }
+  ```
+- **Response (201 Created):**
+  ```json
+  {
+    "status": "success",
+    "message": "User created successfully",
+    "data": {
+      "user": {
+        "id": 1,
+        "name": "John Doe",
+        "email": "johndoe@example.com",
+        "createdAt": "2026-09-27T00:00:00.000Z",
+        "updatedAt": "2026-09-27T00:00:00.000Z"
+      }
+    }
+  }
+  ```
+
+#### • Login User (Masuk)
+- **Method:** `POST`
+- **URL:** `/api/users/login`
+- **Headers:** `Content-Type: application/json`
+- **Body Request:**
+  ```json
+  {
+    "email": "johndoe@example.com",
+    "password": "secretpassword"
+  }
+  ```
+- **Response (200 OK):**
+  *(Menyimpan `accessToken` dan `refreshToken` ke HTTP-Only Cookie)*
+  ```json
+  {
+    "status": "success",
+    "message": "User logged in successfully",
+    "data": {
+      "user": {
+        "id": 1,
+        "name": "John Doe",
+        "email": "johndoe@example.com",
+        "createdAt": "2026-09-27T00:00:00.000Z",
+        "updatedAt": "2026-09-27T00:00:00.000Z"
+      },
+      "accessToken": "eyJhbGciOi..."
+    }
+  }
+  ```
+
+#### • Refresh Token
+- **Method:** `POST`
+- **URL:** `/api/users/auth/refresh`
+- **Cookie Wajib:** `refreshToken`
+- **Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "message": "Token refreshed successfully",
+    "data": {
+      "tokens": "eyJhbGciOi..."
+    }
+  }
+  ```
+
+#### • Logout User
+- **Method:** `DELETE`
+- **URL:** `/api/users/logout`
+- **Response (200 OK):**
+  *(Menghapus cookie `refreshToken`)*
+  ```json
+  {
+    "status": "success",
+    "message": "User logged out successfully"
+  }
+  ```
+
+---
+
+### 2. Endpoint Barang (`/items`)
+*(Semua endpoint barang memerlukan autentikasi cookie `accessToken`)*
+
+#### • Tambah Barang (Create Item)
+- **Method:** `POST`
+- **URL:** `/api/items`
+- **Headers:** `Content-Type: application/json`
+- **Cookie:** `accessToken`
+- **Body Request:**
+  ```json
+  {
+    "userId": 1,
+    "name": "Laptop ThinkPad",
+    "description": "Laptop bisnis kondisi mulus",
+    "stock": 10,
+    "price": 12500000
+  }
+  ```
+- **Response (201 Created):**
+  ```json
+  {
+    "status": "success",
+    "message": "Item created successfully",
+    "data": {
+      "item": {
+        "id": 1,
+        "userId": 1,
+        "name": "Laptop ThinkPad",
+        "description": "Laptop bisnis kondisi mulus",
+        "stock": 10,
+        "price": "12500000.00",
+        "createdAt": "2026-09-27T00:00:00.000Z",
+        "updatedAt": "2026-09-27T00:00:00.000Z"
+      }
+    }
+  }
+  ```
+
+#### • Lihat Daftar Barang (Search & Pagination)
+- **Method:** `GET`
+- **URL:** `/api/items`
+- **Query Parameters (Opsional):**
+  - `search`: Kata kunci pencarian nama atau deskripsi barang.
+  - `page`: Nomor halaman (default: `1`).
+  - `limit`: Jumlah barang per halaman (default: `10`).
+- **Contoh Request:** `/api/items?search=laptop&page=1&limit=5`
+- **Cookie:** `accessToken`
+- **Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "data": {
+      "items": [
+        {
+          "id": 1,
+          "userId": 1,
+          "name": "Laptop ThinkPad",
+          "description": "Laptop bisnis kondisi mulus",
+          "stock": 10,
+          "price": "12500000.00",
+          "createdAt": "2026-09-27T00:00:00.000Z",
+          "updatedAt": "2026-09-27T00:00:00.000Z"
+        }
+      ],
+      "pagination": {
+        "page": 1,
+        "limit": 5,
+        "totalItems": 1,
+        "totalPages": 1
+      }
+    }
+  }
+  ```
+
+#### • Ubah Barang (Update Item)
+- **Method:** `PUT`
+- **URL:** `/api/items/:id`
+- **Headers:** `Content-Type: application/json`
+- **Cookie:** `accessToken`
+- **Body Request:**
+  ```json
+  {
+    "userId": 1,
+    "name": "Laptop ThinkPad T480",
+    "description": "RAM sudah di-upgrade ke 16GB",
+    "stock": 8,
+    "price": 13000000
+  }
+  ```
+- **Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "message": "Item updated successfully",
+    "data": {
+      "item": {
+        "id": 1,
+        "userId": 1,
+        "name": "Laptop ThinkPad T480",
+        "description": "RAM sudah di-upgrade ke 16GB",
+        "stock": 8,
+        "price": "13000000.00",
+        "createdAt": "2026-09-27T00:00:00.000Z",
+        "updatedAt": "2026-09-27T00:00:00.000Z"
+      }
+    }
+  }
+  ```
+
+#### • Hapus Barang (Delete Item)
+- **Method:** `DELETE`
+- **URL:** `/api/items/:id`
+- **Cookie:** `accessToken`
+- **Response (200 OK):**
+  ```json
+  {
+    "status": "success",
+    "message": "Item deleted successfully"
+  }
+  ```
+
+---
+
 # 🧠 Pertanyaan Pemahaman
 
 ### 1. Alur Request
