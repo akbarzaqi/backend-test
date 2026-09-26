@@ -93,121 +93,26 @@ backend-test/
 ### 1. Alur Request
 > **Pertanyaan:** Jelaskan alur perjalanan sebuah request dari saat API dipanggil oleh client hingga data tersimpan di database. (Misal: Router -> Middleware -> Controller -> Service -> Repository). Mengapa Anda memisahkan logic seperti itu?
 
-#### A. Alur Perjalanan Request:
-1. **Client (Frontend / Postman):** Mengirimkan HTTP request (misalnya `POST /api/items` dengan payload JSON dan Cookie/Header).
-2. **Server & Global Middleware (`server.ts`):**
-   - `cors()`: Memeriksa dan memvalidasi origin client serta mengizinkan pengiriman kredensial cookie (`credentials: true`).
-   - `express.json()`: Melakukan parsing payload body JSON menjadi objek JavaScript di `req.body`.
-   - `cookieParser()`: Melakukan parsing header cookie HTTP menjadi objek di `req.cookies`.
-3. **Router (`routeItems.ts` / `routeUsers.ts`):** Mencocokkan endpoint URL dan HTTP method yang dipanggil, lalu mengarahkan request ke middleware dan handler yang bersangkutan.
-4. **Custom Middleware (`middleware/auth.ts`):** 
-   - Memeriksa otentikasi token JWT (misalnya dari `req.cookies.accessToken`).
-   - Jika token tidak ada / tidak valid, request langsung diputus dengan respon `401 Unauthorized`.
-   - Jika token valid, middleware mendekode data user (`req.user = decoded`) dan memanggil `next()` untuk melanjutkan ke Handler.
-5. **Controller / Handler (`itemsHandler.ts`):**
-   - **Validasi Input:** Memanggil layer validator (Joi) untuk memastikan format input sudah sesuai (misal: stok tidak negatif, tipe data sesuai). Jika gagal, mengembalikan respon `400 Bad Request`.
-   - **Ekstraksi Data:** Mengambil data yang sudah valid dari `req.body` atau `req.query`.
-   - Memanggil method yang sesuai pada **Service** untuk mengeksekusi logika bisnis.
-   - **Format Respon:** Membungkus hasil pemrosesan ke dalam format standar JSON (`status`, `message`, `data`) beserta HTTP status code (`200 OK`, `201 Created`, dll).
-6. **Service (`ItemService.ts`):**
-   - Menjalankan logika bisnis (misal: kalkulasi pagination, query filtering, enkripsi password).
-   - Memanggil **Prisma Client** (ORM) untuk berinteraksi dengan database.
-7. **Database (PostgreSQL):**
-   - Prisma mengeksekusi query SQL yang dihasilkan ke server PostgreSQL.
-   - Data berhasil disimpan/diupdate/diambil, lalu hasilnya dikembalikan secara bertingkat: **Database $\rightarrow$ Service $\rightarrow$ Handler $\rightarrow$ Client**.
+Alur perjalanan request dimulai ketika client (seperti frontend atau API client) mengirimkan HTTP request ke server. Di pintu masuk server Express, request terlebih dahulu melewati middleware global, yaitu CORS untuk memastikan izin akses domain, Express JSON parser untuk membaca payload body, dan Cookie Parser untuk mengekstrak cookie yang dikirimkan. Setelah itu, request diarahkan oleh Router menuju rute spesifik yang dituju. Sebelum mencapai controller/handler, request disaring oleh middleware autentikasi untuk memverifikasi validitas token JWT yang ada pada cookie. Jika token tidak valid atau tidak ada, middleware langsung menghentikan siklus request dan mengembalikan respon 401 Unauthorized. Apabila valid, data user hasil decode akan ditempelkan ke objek request dan diteruskan ke Handler. Di dalam Handler, data input divalidasi terlebih dahulu menggunakan schema Joi untuk memastikan tidak ada input yang salah atau bernilai negatif. Jika validasi lolos, Handler meneruskan data bersih tersebut ke layer Service untuk menjalankan logika bisnis aplikasi, seperti kalkulasi data atau enkripsi. Pada akhirnya, Service memanggil Prisma Client untuk mengeksekusi query ke database PostgreSQL, lalu hasil operasi tersebut dikembalikan secara berantai kembali ke Handler untuk dibungkus menjadi respon JSON terstandarisasi sebelum dikirim kembali ke client.
 
-#### B. Mengapa Memisahkan Logic Seperti Itu? (Separation of Concerns):
-- **Single Responsibility Principle (SRP):** Setiap file/layer hanya memiliki satu tanggung jawab spesifik:
-  - *Router* hanya mengurus routing URL.
-  - *Middleware* hanya mengurus otentikasi/pre-processing.
-  - *Validator* hanya mengurus keabsahan tipe dan aturan data.
-  - *Handler* hanya mengurus protokol HTTP (request/response).
-  - *Service* hanya mengurus aturan bisnis dan operasi database.
-- **Maintainability & Kemudahan Refactoring:** Jika di masa depan ingin mengganti ORM (misal Prisma ke Kysely/TypeORM) atau mengganti framework HTTP (misal Express ke Fastify), perubahan hanya terjadi pada layer terkait tanpa perlu merombak seluruh codebase.
-- **Reusability & Testability:** Logika di Service dapat digunakan kembali oleh handler lain atau background job, serta sangat mudah diuji (*Unit Testing*) secara terisolasi menggunakan mock.
+Alasan utama memisahkan logika ke dalam struktur Router, Middleware, Handler, dan Service adalah untuk menerapkan prinsip *Separation of Concerns* (pemisahan tanggung jawab) dan *Single Responsibility Principle*. Dengan arsitektur ini, setiap komponen memiliki satu tugas yang fokus dan terisolasi: router hanya mengurus pemetaan URL, middleware menangani filter pra-eksekusi seperti keamanan, handler mengurus protokol HTTP dan validasi, sedangkan service fokus murni pada aturan bisnis dan interaksi data. Pemisahan ini membuat kode menjadi jauh lebih mudah dirawat (*maintainable*), mudah dikembangkan di kemudian hari (*scalable*), mudah diuji melalui unit testing tanpa harus menjalankan HTTP server nyata, serta memungkinkan logika bisnis di service untuk digunakan kembali oleh controller lain maupun background job.
 
 ---
 
 ### 2. Keamanan & Token
 > **Pertanyaan:** Dimana sebaiknya frontend menyimpan token JWT yang dikembalikan oleh API ini (Local Storage atau HttpOnly Cookie)? Apa alasan dan risiko keamanannya?
 
-#### A. Rekomendasi Penyimpanan:
-- **Refresh Token:** Wajib disimpan di **HttpOnly, Secure, SameSite Cookie**.
-- **Access Token:** Disimpan di **Memory (State React/Vue/Pinia)** atau di dalam **HttpOnly Cookie**.
+Frontend sebaiknya menyimpan token JWT dengan strategi pemisahan peran, yaitu menyimpan Refresh Token di dalam **HttpOnly Cookie** dan Access Token di dalam **Memory (State aplikasi)** atau juga di dalam HttpOnly Cookie. Alasan utamanya adalah untuk memitigasi risiko keamanan yang paling sering terjadi pada aplikasi web, yaitu Cross-Site Scripting (XSS) dan Cross-Site Request Forgery (CSRF).
 
-#### B. Alasan & Analisis Risiko Keamanan:
-
-| Mekanisme Penyimpanan | Risiko Keamanan Utama | Penjelasan |
-| :--- | :--- | :--- |
-| **Local Storage** | **Sangat Rentan terhadap XSS (Cross-Site Scripting)** | Script JavaScript client memiliki akses penuh ke Local Storage. Jika aplikasi memiliki celah XSS (misal dari input yang tidak di-sanitize atau third-party package yang disusupi malware), penyerang dapat menjalankan `localStorage.getItem('token')` dan mencuri token secara instan untuk disalahgunakan di luar aplikasi. |
-| **HttpOnly Cookie** | **Kebal terhadap XSS, namun Rentan terhadap CSRF (Cross-Site Request Forgery)** | Flag `HttpOnly` melarang JavaScript client membaca cookie, sehingga token aman dari pencurian via XSS. Namun, karena browser otomatis melampirkan cookie pada setiap request, penyerang dapat memicu request palsu dari web lain (CSRF). |
-
-#### C. Mitigasi Risiko pada HttpOnly Cookie:
-Untuk mengatasi risiko CSRF pada HttpOnly Cookie, kami menerapkan konfigurasi keamanan standar industri:
-1. **`SameSite=Strict` atau `SameSite=Lax`:** Mencegah browser mengirimkan cookie jika request berasal dari situs pihak ketiga (cross-origin).
-2. **`Secure: true`:** Memastikan cookie hanya dapat dikirimkan melalui protokol terenkripsi HTTPS (diaktifkan pada environment production).
-3. **Masa Berlaku Singkat (Short-lived Access Token):** Access token diberi masa kadaluarsa singkat (misal 15 menit), sedangkan Refresh Token yang berumur panjang (7 hari) dilindungi secara ketat di HttpOnly Cookie.
+Jika token disimpan di Local Storage, token tersebut dapat diakses secara langsung oleh script JavaScript di sisi browser. Apabila aplikasi memiliki celah keamanan XSS—misalnya akibat input yang tidak tersanitasi dengan baik atau adanya pustaka pihak ketiga yang disusupi malware—penyerang dapat dengan mudah mengeksekusi script untuk mencuri token dari Local Storage dan menggunakannya dari luar aplikasi. Sebaliknya, penyimpanan token di dalam cookie dengan atribut `HttpOnly` membuat cookie tersebut sama sekali tidak dapat dibaca atau dimanipulasi oleh JavaScript client, sehingga kebal terhadap pencurian via serangan XSS. Meskipun penggunaan cookie memiliki risiko serangan CSRF, risiko ini dapat dicegah secara efektif dengan mengonfigurasi atribut `SameSite=Strict` atau `SameSite=Lax` agar browser menolak pengiriman cookie dari domain pihak ketiga, serta menambahkan atribut `Secure` agar cookie hanya ditransmisikan melalui koneksi terenkripsi HTTPS. Dengan demikian, menaruh token (terutama Refresh Token yang berumur panjang) di HttpOnly Cookie memberikan lapisan perlindungan yang jauh lebih kokoh dibandingkan menyimpannya di Local Storage.
 
 ---
 
 ### 3. Penanganan Konkurensi (Concurrency)
 > **Pertanyaan:** Misalkan API Anda dipublish ke publik, lalu ada 2 user yang secara TEPAT BERSAMAAN melakukan request untuk mengurangi stok barang X (stok tersisa: 1). Bagaimana cara Anda mencegah stok menjadi -1 di database?
 
-Kondisi ini dikenal sebagai **Race Condition** (*Lost Update / Double Spending*), di mana User A dan User B sama-sama membaca `stok = 1` sebelum salah satunya selesai melakukan pengurangan, sehingga keduanya mengurangi stok dan menghasilkan nilai `-1`.
+Kondisi ketika dua request masuk secara bersamaan untuk mengurangi stok barang yang hanya tersisa satu dikenal sebagai masalah *Race Condition* (*Lost Update*). Hal ini terjadi karena kedua request sama-sama membaca stok bernilai 1 sebelum salah satu request berhasil menguranginya, sehingga kedua request melanjutkan transaksi dan menyebabkan stok akhir bernilai -1.
 
-Untuk mencegah hal tersebut, ada 3 strategi yang dapat diterapkan:
+Untuk mencegah kondisi tersebut di database, pendekatan paling efisien dan direkomendasikan adalah menggunakan **Atomic Conditional Update** langsung di level database, misalnya melalui query `UPDATE items SET stock = stock - 1 WHERE id = X AND stock >= 1`. Pada Prisma, pendekatan ini diimplementasikan menggunakan fungsi `updateMany` dengan klausa kondisi `where: { id: itemId, stock: { gte: 1 } }` dan `data: { stock: { decrement: 1 } }`. Karena database PostgreSQL mengeksekusi operasi update baris data secara serial (*atomic lock*), transaksi pertama yang tiba di database akan berhasil mengubah stok menjadi 0 dan mengembalikan jumlah baris yang terupdate sebanyak satu baris. Sementara itu, transaksi kedua yang tiba beberapa milidetik kemudian akan mendapati kondisi `stock >= 1` sudah bernilai salah, sehingga operasinya tidak mengubah data apapun (*count* bernilai 0) dan sistem dapat langsung menolak transaksi kedua dengan pesan bahwa stok sudah habis.
 
-#### 1. Atomic Conditional Update (Pendekatan Paling Efisien & Direkomendasikan)
-Alih-alih membaca data terlebih dahulu lalu menguranginya di level aplikasi, pengurangan stok dilakukan langsung di level database secara atomic dengan kondisi stok mencukupi:
-
-```typescript
-// Menggunakan Prisma updateMany dengan filter kondisi stok
-const result = await prisma.item.updateMany({
-  where: {
-    id: itemId,
-    stock: {
-      gte: quantityToReduce, // Hanya update JIKA stock saat ini >= jumlah yang ingin dikurangi
-    },
-  },
-  data: {
-    stock: {
-      decrement: quantityToReduce, // Operasi atomic decrement di database
-    },
-  },
-});
-
-// Jika count === 0, berarti stok sudah tidak mencukupi saat query dieksekusi
-if (result.count === 0) {
-  throw new Error("Stok barang tidak mencukupi atau sudah habis");
-}
-```
-**Mengapa efektif:** Database PostgreSQL menjalankan operasi update pada satu baris secara serial (atomic lock). User pertama yang query-nya dieksekusi akan berhasil (`stock` menjadi `0`, `count = 1`), sedangkan user kedua yang datang di milidetik berikutnya akan mendapati kondisi `stock >= 1` sudah `false` (`count = 0`), sehingga otomatis digagalkan.
-
-#### 2. Database Constraint (`CHECK Constraint`)
-Menerapkan batasan integritas langsung di level database PostgreSQL sebagai jaring pengaman (*fail-safe* absolut):
-```sql
-ALTER TABLE items ADD CONSTRAINT stock_non_negative CHECK (stock >= 0);
-```
-Jika terjadi anomali atau bug di aplikasi yang mencoba membuat nilai `stock < 0`, PostgreSQL akan langsung menolak transaksi tersebut dan melempar error constraint violation.
-
-#### 3. Pessimistic Locking (`SELECT ... FOR UPDATE` dalam Transaksi)
-Mengunci baris data barang sehingga user lain harus mengantre:
-```typescript
-await prisma.$transaction(async (tx) => {
-  // 1. Mengunci baris item sampai transaksi ini commit
-  const [item] = await tx.$queryRaw<Item[]>`
-    SELECT * FROM items WHERE id = ${itemId} FOR UPDATE
-  `;
-
-  if (!item || item.stock < quantityToReduce) {
-    throw new Error("Stok barang habis");
-  }
-
-  // 2. Update stok
-  await tx.item.update({
-    where: { id: itemId },
-    data: { stock: item.stock - quantityToReduce },
-  });
-});
-```
-User kedua akan diblokir (*wait*) sampai transaksi User pertama selesai. Ketika kunci dilepas, User kedua membaca stok yang sudah bernilai `0`, lalu transaksinya dibatalkan.
+Selain pendekatan atomic update, integritas data juga dapat diperkuat dengan menambahkan batasan langsung di level database menggunakan fitur *Database Constraint*, yaitu perintah SQL `CHECK (stock >= 0)`. Constraint ini bertindak sebagai jaring pengaman absolut yang akan langsung menggagalkan dan melempar error pada transaksi apapun yang mencoba menghasilkan nilai stok negatif. Untuk skenario yang lebih kompleks yang melibatkan banyak tabel sekaligus, kita juga dapat menggunakan teknik *Pessimistic Locking* melalui query `SELECT ... FOR UPDATE` di dalam blok transaksi Prisma, yang akan mengunci baris data barang dan memaksa transaksi lain mengantre hingga transaksi pertama selesai dan melepaskan kunci tersebut.
