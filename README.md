@@ -4,7 +4,7 @@ Project backend API menggunakan Node.js, Express, TypeScript, Prisma ORM, dan Po
 
 ---
 
-## 🚀 Panduan Menjalankan Project Secara Lokal
+## Panduan Menjalankan Project Secara Lokal
 
 ### Prasyarat
 - **Node.js** (v20+ atau v22+) & **npm**
@@ -44,7 +44,7 @@ Aplikasi akan berjalan di: `http://localhost:3000`
 
 ---
 
-## 🛠️ Perintah Berguna Lainnya
+## Perintah Berguna Lainnya
 
 - **Prisma Studio (GUI Database Viewer):**
   ```bash
@@ -64,7 +64,7 @@ Aplikasi akan berjalan di: `http://localhost:3000`
 
 ---
 
-## 📁 Struktur Direktori
+## Struktur Direktori
 
 ```text
 backend-test/
@@ -88,7 +88,7 @@ backend-test/
 
 ---
 
-## 📖 Dokumentasi Endpoint API
+## Dokumentasi Endpoint API
 
 Base URL: `http://localhost:3000/api`
 
@@ -305,7 +305,7 @@ Base URL: `http://localhost:3000/api`
 
 ---
 
-# 🧠 Pertanyaan Pemahaman
+# Pertanyaan Pemahaman
 
 ### 1. Alur Request
 > **Pertanyaan:** Jelaskan alur perjalanan sebuah request dari saat API dipanggil oleh client hingga data tersimpan di database. (Misal: Router -> Middleware -> Controller -> Service -> Repository). Mengapa Anda memisahkan logic seperti itu?
